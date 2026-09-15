@@ -287,3 +287,49 @@ def test_create_appointment_on_holiday():
 
     app.dependency_overrides.clear()
     db.close()
+
+def test_get_appointments():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    TestingSessionLocal = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+    )
+
+    Base.metadata.create_all(bind=engine)
+
+    db = TestingSessionLocal()
+
+    appointment = Appointment(
+        date=date(2026, 2, 12),
+        time=time(10, 0),
+    )
+
+    db.add(appointment)
+    db.commit()
+
+    def override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    client = TestClient(app)
+
+    response = client.get("/appointments")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["id"] == 1
+    assert data[0]["date"] == "2026-02-12"
+    assert data[0]["time"] == "10:00:00"
+
+    app.dependency_overrides.clear()
+    db.close()

@@ -85,3 +85,11 @@ async def create_appointment(
         "date": new_appointment.date,
         "time": new_appointment.time,
     }
+
+@app.get("/appointments")
+def get_appointments(
+    db: Session = Depends(get_db),
+):
+    appointments = db.query(Appointment).all()
+
+    return appointments
