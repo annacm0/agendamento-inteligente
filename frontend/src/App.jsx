@@ -1,121 +1,211 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+const API_URL = 'http://localhost:8000'
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [selectedDate, setSelectedDate] = useState('')
+  const [availableTimes, setAvailableTimes] = useState([])
+  const [selectedTime, setSelectedTime] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [booking, setBooking] = useState(false)
+  const [error, setError] = useState('')
+  const [confirmation, setConfirmation] = useState(null)
+
+  useEffect(() => {
+    if (!selectedDate) {
+      return
+    }
+
+    async function fetchAvailableTimes() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const response = await fetch(
+          `${API_URL}/available?date=${selectedDate}`
+        )
+
+        if (!response.ok) {
+          throw new Error('Não foi possível consultar os horários.')
+        }
+
+        const data = await response.json()
+
+        setAvailableTimes(data.available_times)
+      } catch {
+        setAvailableTimes([])
+        setError('Não foi possível consultar os horários disponíveis.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAvailableTimes()
+  }, [selectedDate])
+
+  async function handleAppointment() {
+    setBooking(true)
+    setError('')
+
+    try {
+      const response = await fetch(`${API_URL}/appointments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          date: selectedDate,
+          time: selectedTime,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+
+        throw new Error(
+          data.detail || 'Não foi possível realizar o agendamento.'
+        )
+      }
+
+      const data = await response.json()
+
+      setConfirmation(data)
+
+      setAvailableTimes((times) =>
+        times.filter((time) => time !== selectedTime)
+      )
+
+      setSelectedTime('')
+    } catch (error) {
+      setError(error.message)
+    } finally {
+      setBooking(false)
+    }
+  }
+
+  function formatDate(date) {
+    return new Intl.DateTimeFormat('pt-BR').format(
+      new Date(`${date}T00:00:00`)
+    )
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <main className="appointment-page">
+      <section className="appointment-card">
+        <header className="appointment-header">
+          <h1>Agendamento</h1>
+
+          <p>Escolha uma data e um horário disponível.</p>
+        </header>
+
+        <div className="appointment-content">
+          <div className="date-section">
+            <label htmlFor="date">Data</label>
+
+            <input
+              id="date"
+              type="date"
+              lang="pt-BR"
+              value={selectedDate}
+              onChange={(event) => {
+                const date = event.target.value
+
+                setSelectedDate(date)
+                setSelectedTime('')
+                setConfirmation(null)
+                setError('')
+
+                if (!date) {
+                  setAvailableTimes([])
+                }
+              }}
+            />
+          </div>
+
+          <div className="times-section">
+            <h2>Horários disponíveis</h2>
+
+            {!selectedDate && (
+              <p className="empty-message">
+                Selecione uma data para visualizar os horários disponíveis.
+              </p>
+            )}
+
+            {loading && (
+              <p className="empty-message">
+                Consultando horários...
+              </p>
+            )}
+
+            {error && (
+              <p className="error-message">
+                {error}
+              </p>
+            )}
+
+            {!loading &&
+              !error &&
+              selectedDate &&
+              availableTimes.length === 0 && (
+                <p className="empty-message">
+                  Não há horários disponíveis para esta data.
+                </p>
+              )}
+
+            {!loading && !error && availableTimes.length > 0 && (
+              <div className="time-list">
+                {availableTimes.map((time) => (
+                  <button
+                    key={time}
+                    type="button"
+                    className={selectedTime === time ? 'selected' : ''}
+                    onClick={() => setSelectedTime(time)}
+                  >
+                    {time.slice(0, 5)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedTime && (
+              <div className="confirmation-section">
+                <p>
+                  Horário selecionado:{' '}
+                  <strong>{selectedTime.slice(0, 5)}</strong>
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleAppointment}
+                  disabled={booking}
+                >
+                  {booking
+                    ? 'Agendando...'
+                    : 'Confirmar agendamento'}
+                </button>
+              </div>
+            )}
+
+            {confirmation && (
+              <div className="success-message">
+                <h2>Agendamento realizado!</h2>
+
+                <p>
+                  Data:{' '}
+                  <strong>{formatDate(confirmation.date)}</strong>
+                </p>
+
+                <p>
+                  Horário:{' '}
+                  <strong>{confirmation.time.slice(0, 5)}</strong>
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
